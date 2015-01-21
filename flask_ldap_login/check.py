@@ -28,9 +28,9 @@ def main():
 
     userdata = app.ldap_login_manager.ldap_login(args.username, args.password)
     if userdata is None:
-        print "Invalid username/password"
+        print("Invalid username/password")
     else:
-        print "Got userdata for %s" % args.username
+        print ("Got userdata for %s" % args.username)
         pprint(userdata)
 
 
