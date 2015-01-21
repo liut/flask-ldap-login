@@ -100,8 +100,7 @@ class LDAPLoginManager(object):
         """
         if not results:
             return None
-        userobj = results[0]
-
+        userobj = results[0]['attributes']
         keymap = self.config.get('KEY_MAP')
         if keymap:
             return {key:scalar(userobj.get(value)) for key, value in keymap.items()}
@@ -129,7 +128,7 @@ class LDAPLoginManager(object):
         'Transform the KEY_MAP paramiter into an attrlist for ldap filters'
         keymap = self.config.get('KEY_MAP')
         if keymap:
-            return keymap.values()
+            return list(keymap.values())
         else:
             return None
 
@@ -171,7 +170,6 @@ class LDAPLoginManager(object):
             scope = search.get('scope', ldap3.SEARCH_SCOPE_WHOLE_SUBTREE,)
             log.debug("Search for base=%s filter=%s" % (base, filt))
             # results = self.conn.search_s(base, scope, filt, attrlist=self.attrlist)
-            print(filt)
             if self.conn.search(base, filt, scope, attributes=self.attrlist):
                 results = self.conn.response
                 log.debug("User with DN=%s found" % results[0]['dn'])
