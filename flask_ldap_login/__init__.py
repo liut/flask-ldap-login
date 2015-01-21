@@ -43,7 +43,7 @@ update the application like::
 import logging
 
 import flask
-import ldap
+import ldap3
 
 from .forms import LDAPLoginForm
 
@@ -72,6 +72,8 @@ class LDAPLoginManager(object):
             self.init_app(app)
 
         self.conn = None
+        self.server = None
+
         self._save_user = None
 
 
@@ -98,7 +100,7 @@ class LDAPLoginManager(object):
         """
         if not results:
             return None
-        userobj = results[0][1]
+        userobj = results[0]
 
         keymap = self.config.get('KEY_MAP')
         if keymap:
@@ -146,8 +148,17 @@ class LDAPLoginManager(object):
         bind_auth = self.config['BIND_AUTH']
         try:
             log.debug("Binding with the BIND_DN %s" % user)
-            self.conn.simple_bind_s(user, bind_auth)
-        except ldap.INVALID_CREDENTIALS:
+            # self.conn.simple_bind_s(user, bind_auth)
+            self.conn = ldap3.Connection(
+                self.server, 
+                auto_bind=True, 
+                client_strategy=ldap3.STRATEGY_SYNC, 
+                user=user,
+                password=bind_auth, 
+                authentication=ldap3.AUTH_SIMPLE, 
+                check_names=True)
+
+        except ldap3.core.exceptions.LDAPBindError:
             log.debug("Could not connect bind with the BIND_DN=%s" % user)
             return None
 
@@ -157,15 +168,25 @@ class LDAPLoginManager(object):
         for search in user_search:
             base = search['base']
             filt = search['filter'] % ctx
-            scope = search.get('scope', ldap.SCOPE_SUBTREE)
+            scope = search.get('scope', ldap3.SEARCH_SCOPE_WHOLE_SUBTREE,)
             log.debug("Search for base=%s filter=%s" % (base, filt))
-            results = self.conn.search_s(base, scope, filt, attrlist=self.attrlist)
-            if results:
-                log.debug("User with DN=%s found" % results[0][0])
+            # results = self.conn.search_s(base, scope, filt, attrlist=self.attrlist)
+            print(filt)
+            if self.conn.search(base, filt, scope, attributes=self.attrlist):
+                results = self.conn.response
+                log.debug("User with DN=%s found" % results[0]['dn'])
                 try:
-                    self.conn.simple_bind_s(results[0][0], password)
-                except ldap.INVALID_CREDENTIALS:
-                    self.conn.simple_bind_s(user, bind_auth)
+                    # self.conn.simple_bind_s(results[0]['dn'], password)
+                    ldap3.Connection(
+                        self.server, 
+                        auto_bind=True, 
+                        client_strategy=ldap3.STRATEGY_SYNC, 
+                        user=results[0]['dn'], 
+                        password=password, 
+                        authentication=ldap3.AUTH_SIMPLE, 
+                        check_names=True)
+                except ldap3.core.exceptions.LDAPBindError:
+                    # self.conn.simple_bind_s(user, bind_auth)
                     log.debug("Username/password mismatch, continue search...")
                     results = None
                     continue
@@ -174,7 +195,6 @@ class LDAPLoginManager(object):
                     break
 
         log.debug("Unbind")
-        self.conn.unbind_s()
 
         return self.format_results(results)
 
@@ -186,38 +206,41 @@ class LDAPLoginManager(object):
         log.debug("Performing direct bind")
 
         ctx = {'username':username, 'password':password}
-        scope = self.config.get('SCOPE', ldap.SCOPE_SUBTREE)
+        scope = self.config.get('SCOPE', ldap3.SEARCH_SCOPE_WHOLE_SUBTREE)
         user = self.config['BIND_DN'] % ctx
 
         try:
             log.debug("Binding with the BIND_DN %s" % user)
-            self.conn.simple_bind_s(user, password)
-        except ldap.INVALID_CREDENTIALS:
+            # self.conn.simple_bind_s(user, password)
+            direct_conn = ldap3.Connection(
+                self.server, 
+                auto_bind=True, 
+                client_strategy=ldap3.STRATEGY_SYNC, 
+                user=user, 
+                password=password, 
+                authentication=ldap3.AUTH_SIMPLE, 
+                check_names=True)
+        except ldap3.core.exceptions.LDAPInvalidCredentialsResult:
             return None
-        results = self.conn.search_s(user, scope, attrlist=self.attrlist)
-        self.conn.unbind_s()
+
+        # results = self.conn.search_s(user, scope, attrlist=self.attrlist)
+        direct_search_result = direct_conn.search(
+            search_base=user, 
+            search_filter=None, 
+            search_scope=scope, 
+            attributes=self.attrlist)
+
+        if not direct_search_result:
+            return None
+
+        results = direct_conn.response
         return self.format_results(results)
 
 
     def connect(self):
         'initialize ldap connection and set options'
         log.debug("Connecting to ldap server %s" % self.config['URI'])
-        self.conn = ldap.initialize(self.config['URI'])
-
-        for opt, value in self.config.get('OPTIONS', {}).items():
-            if isinstance(opt, str):
-                opt = getattr(ldap, opt)
-
-            try:
-                if isinstance(value, str):
-                    value = getattr(ldap, value)
-            except AttributeError:
-                pass
-            self.conn.set_option(opt, value)
-
-        if self.config.get('START_TLS'):
-            log.debug("Starting TLS")
-            self.conn.start_tls_s()
+        self.server = ldap3.Server(self.config.get('URI'), get_info = ldap3.GET_ALL_INFO)
 
     def ldap_login(self, username, password):
         """

@@ -1,7 +1,7 @@
 '''
 Base flask application to use in ldap examples
 '''
-from flask_login import LoginManager
+from flask_login import LoginManager, UserMixin
 from flask import Flask, render_template
 
 
@@ -17,7 +17,7 @@ login_manager = LoginManager(app)
 # Store users in memory
 users = {}
 
-class User(object):
+class User(UserMixin):
     'Simple user object for use with flask-login'
     def __init__(self, username, data=None):
         self.username = username

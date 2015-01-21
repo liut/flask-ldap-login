@@ -1,0 +1,10 @@
+{{ get_flashed_messages() }}
+<form method="POST">
+Username:
+{{ form.username }}<br/>
+Password:
+<input type="text" value="{{ form.password.data or '' }}" name="password" /><br />
+{{ form.remember_me }}<br/>
+{{ form.hidden_tag() }}
+<input type="submit" value="lel" />
+</form>

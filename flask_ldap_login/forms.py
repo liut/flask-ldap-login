@@ -2,7 +2,7 @@ from flask.ext.wtf import Form
 import wtforms
 from wtforms import validators
 from flask import flash, current_app
-import ldap
+import ldap3
 
 class LDAPLoginForm(Form):
     """
@@ -23,16 +23,16 @@ class LDAPLoginForm(Form):
         password = self.password.data
         try:
             userdata = ldap_mgr.ldap_login(username, password)
-        except ldap.INVALID_CREDENTIALS:
+        except ldap3.core.exceptions.LDAPBindError:
             flash("Invalid LDAP credentials", 'danger')
             return False
-        except ldap.LDAPError as err:
-            if isinstance(err.message, dict):
-                message = err.message.get('desc', str(err))
-            else:
-                message = str(err.message)
-            flash(message, 'danger')
-            return False
+        # except ldap.LDAPError as err:
+        #     if isinstance(err.message, dict):
+        #         message = err.message.get('desc', str(err))
+        #     else:
+        #         message = str(err.message)
+        #     flash(message, 'danger')
+        #     return False
 
         if userdata is None:
             flash("Invalid LDAP credentials", 'danger')
