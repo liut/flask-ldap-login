@@ -103,9 +103,13 @@ class LDAPLoginManager(object):
         userobj = results[0]['attributes']
         keymap = self.config.get('KEY_MAP')
         if keymap:
-            return {key:scalar(userobj.get(value)) for key, value in keymap.items()}
+            d =  {key:scalar(userobj.get(value)) for key, value in keymap.items()}
+            d['dn'] = results[0]['dn']
+            return d
         else:
-            return {key:scalar(value) for key, value in userobj.items()}
+            d = {key:scalar(value) for key, value in userobj.items()}
+            d['dn'] = results[0]['dn']
+            return d
 
     def save_user(self, callback):
         '''
@@ -132,6 +136,20 @@ class LDAPLoginManager(object):
         else:
             return None
 
+    def make_connection(self):
+        user = self.config['BIND_DN']
+        bind_auth = self.config['BIND_AUTH']
+        
+        log.debug("Binding with the BIND_DN %s" % user)
+        conn = ldap3.Connection(
+            self.server, 
+            auto_bind=True, 
+            client_strategy=ldap3.STRATEGY_SYNC, 
+            user=user,
+            password=bind_auth, 
+            authentication=ldap3.AUTH_SIMPLE, 
+            check_names=True)
+        return conn
 
     def bind_search(self, username, password):
         """
@@ -141,22 +159,8 @@ class LDAPLoginManager(object):
         log.debug("Performing bind/search")
 
         ctx = {'username':username, 'password':password}
-
-        user = self.config['BIND_DN'] % ctx
-
-        bind_auth = self.config['BIND_AUTH']
         try:
-            log.debug("Binding with the BIND_DN %s" % user)
-            # self.conn.simple_bind_s(user, bind_auth)
-            self.conn = ldap3.Connection(
-                self.server, 
-                auto_bind=True, 
-                client_strategy=ldap3.STRATEGY_SYNC, 
-                user=user,
-                password=bind_auth, 
-                authentication=ldap3.AUTH_SIMPLE, 
-                check_names=True)
-
+            conn = self.make_connection()
         except ldap3.core.exceptions.LDAPBindError:
             log.debug("Could not connect bind with the BIND_DN=%s" % user)
             return None
@@ -170,8 +174,8 @@ class LDAPLoginManager(object):
             scope = search.get('scope', ldap3.SEARCH_SCOPE_WHOLE_SUBTREE,)
             log.debug("Search for base=%s filter=%s" % (base, filt))
             # results = self.conn.search_s(base, scope, filt, attrlist=self.attrlist)
-            if self.conn.search(base, filt, scope, attributes=self.attrlist):
-                results = self.conn.response
+            if conn.search(base, filt, scope, attributes=self.attrlist):
+                results = conn.response
                 log.debug("User with DN=%s found" % results[0]['dn'])
                 try:
                     # self.conn.simple_bind_s(results[0]['dn'], password)
@@ -253,5 +257,23 @@ class LDAPLoginManager(object):
         else:
             result = self.direct_bind(username, password)
         return result
+
+
+    def retrieve_posix_groups(self, dn, uid=None):
+        """
+        Retrieve Posix Groups
+        Get a user's groups if a user is specified.
+        """
+
+        conn = self.make_connection()
+        if uid:
+            filt = '(memberUid={uid})'.format(uid=uid)
+        else:
+            filt = '(objectClass=posixGroup)'
+
+        if conn.search(dn, filt, ldap3.SEARCH_SCOPE_WHOLE_SUBTREE, attributes=ldap3.ALL_ATTRIBUTES):
+            return conn.response
+        else:
+            return None
 
 
