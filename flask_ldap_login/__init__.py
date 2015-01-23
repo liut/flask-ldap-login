@@ -48,6 +48,7 @@ import ldap3
 from .forms import LDAPLoginForm
 
 log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
 
 def scalar(value):
     """
@@ -203,26 +204,29 @@ class LDAPLoginManager(object):
             scope = search.get('scope', ldap3.SEARCH_SCOPE_WHOLE_SUBTREE,)
             
             log.debug("Search for base=%s filter=%s" % (base, filt))
-
-            if conn.search(base, filt, scope, attributes=self.attrlist):
-                results = conn.response
-                log.debug("User with DN=%s found" % results[0]['dn'])
-                try:
-                    ldap3.Connection(
-                        self.server, 
-                        auto_bind=True, 
-                        client_strategy=ldap3.STRATEGY_SYNC, 
-                        user=results[0]['dn'], 
-                        password=password, 
-                        authentication=ldap3.AUTH_SIMPLE, 
-                        check_names=True)
-                except ldap3.core.exceptions.LDAPBindError:
-                    log.debug("Username/password mismatch, continue search...")
-                    results = None
-                    continue
-                else:
-                    log.debug("Username/password OK")
-                    break
+            try:
+                if conn.search(base, filt, scope, attributes=self.attrlist):
+                    results = conn.response
+                    log.debug("User with DN=%s found" % results[0]['dn'])
+                    try:
+                        ldap3.Connection(
+                            self.server, 
+                            auto_bind=True, 
+                            client_strategy=ldap3.STRATEGY_SYNC, 
+                            user=results[0]['dn'], 
+                            password=password, 
+                            authentication=ldap3.AUTH_SIMPLE, 
+                            check_names=True)
+                    except ldap3.core.exceptions.LDAPBindError:
+                        log.debug("Username/password mismatch, continue search...")
+                        results = None
+                        continue
+                    else:
+                        log.debug("Username/password OK")
+                        break
+            except Exception:
+                results = None
+                continue
 
         return self.format_results(results)
 
