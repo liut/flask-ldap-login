@@ -140,22 +140,29 @@ class LDAPLoginManager(object):
         'initialize ldap connection and set options'
 
         if not self.server:
-            print ("Making a new server")
-            log.debug("Connecting to ldap server %s" % self.config['URI'])
-            self.server = ldap3.Server(self.config.get('URI'), get_info = ldap3.GET_ALL_INFO)
+            try:
+                log.debug("Connecting to ldap server %s" % self.config['URI'])
+                self.server = ldap3.Server(self.config.get('URI'), get_info = ldap3.GET_ALL_INFO)
+            except Exception:
+                log.debug("Connection to ldap server %s failed." % self.config['URI'])
+                return None
+
+        return True
 
     def make_connection(self):
+        if self.conn and self.conn.last_error:
+            self.conn = None
+
         if self.conn:
             return self.conn
 
         user = self.config['BIND_DN']
         bind_auth = self.config['BIND_AUTH']
-
         log.debug("Binding with the BIND_DN %s" % user)
 
         if not self.server:
             self.make_server()
-
+        
         try:
             conn = ldap3.Connection(
                 self.server, 
@@ -165,8 +172,9 @@ class LDAPLoginManager(object):
                 password=bind_auth, 
                 authentication=ldap3.AUTH_SIMPLE, 
                 check_names=True)
-        except ldap3.core.exceptions.LDAPBindError:
+        except Exception:
             log.debug("Could not connect bind with the BIND_DN=%s" % user)
+            self.conn = None
             return None
 
         self.conn = conn
@@ -181,6 +189,7 @@ class LDAPLoginManager(object):
 
         ctx = {'username':username, 'password':password}
         conn = self.make_connection()
+        print("lel {}".format(conn))
         if not conn:
             # A Connection could not be established.
             return None
@@ -278,14 +287,17 @@ class LDAPLoginManager(object):
         Get a user's groups if a user is specified.
         """
         conn = self.make_connection()
-        if uid:
-            filt = '(memberUid={uid})'.format(uid=uid)
+        if conn:
+            if uid:
+                filt = '(memberUid={uid})'.format(uid=uid)
+            else:
+                filt = '(objectClass=posixGroup)'
+            try:
+                if conn.search(dn, filt, ldap3.SEARCH_SCOPE_WHOLE_SUBTREE, attributes=ldap3.ALL_ATTRIBUTES):
+                    return conn.response
+                else:
+                    return []
+            except Exception:
+                return []
         else:
-            filt = '(objectClass=posixGroup)'
-
-        if conn.search(dn, filt, ldap3.SEARCH_SCOPE_WHOLE_SUBTREE, attributes=ldap3.ALL_ATTRIBUTES):
-            return conn.response
-        else:
-            return None
-
-
+            return []
