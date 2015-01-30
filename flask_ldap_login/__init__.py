@@ -285,23 +285,35 @@ class LDAPLoginManager(object):
         return result
 
 
-    def retrieve_posix_groups(self, dn, uid=None):
+    def retrieve_items(self, dn, search_dn=None, cls='groupOfUniqueNames'):
         """
         Retrieve Posix Groups
         Get a user's groups if a user is specified.
         """
         conn = self.make_connection()
         if conn:
-            if uid:
-                filt = '(memberUid={uid})'.format(uid=uid)
+            if dn:
+                filt = '(uniqueMember={dn})(objectClass={cls})'.format(dn=dn, cls=cls)
             else:
-                filt = '(objectClass=posixGroup)'
+                filt = '(objectClass={cls})'.format(cls=cls)
             try:
-                if conn.search(dn, filt, ldap3.SEARCH_SCOPE_WHOLE_SUBTREE, attributes=ldap3.ALL_ATTRIBUTES):
+                if conn.search(search_dn, filt, ldap3.SEARCH_SCOPE_WHOLE_SUBTREE, attributes=ldap3.ALL_ATTRIBUTES):
                     return conn.response
                 else:
                     return []
             except Exception:
+                return []
+        else:
+            return []
+
+
+    def retrieve_filtered_items(self, search_dn, filter='(objectClass=*)', attributes=ldap3.ALL_ATTRIBUTES):
+        conn = self.make_connection()
+
+        if conn:
+            if conn.search(search_dn, filter, ldap3.SEARCH_SCOPE_WHOLE_SUBTREE, attributes=attributes):
+                return conn.response
+            else:
                 return []
         else:
             return []
