@@ -24,18 +24,9 @@ class LDAPLoginForm(Form):
         try:
             userdata = ldap_mgr.ldap_login(username, password)
         except ldap3.core.exceptions.LDAPBindError:
-            flash("Invalid LDAP credentials", 'danger')
             return False
-        # except ldap.LDAPError as err:
-        #     if isinstance(err.message, dict):
-        #         message = err.message.get('desc', str(err))
-        #     else:
-        #         message = str(err.message)
-        #     flash(message, 'danger')
-        #     return False
-
+    
         if userdata is None:
-            flash("Invalid LDAP credentials", 'danger')
             return False
 
         self.user = ldap_mgr._save_user(username, userdata)
