@@ -258,9 +258,9 @@ class LDAPLoginManager(object):
             return None
 
         direct_search_result = direct_conn.search(
-            search_base=user, 
-            search_filter=None, 
-            search_scope=scope, 
+            search_base=user,
+            search_filter='(objectClass=*)',
+            search_scope=scope,
             attributes=self.attrlist)
 
         if not direct_search_result:

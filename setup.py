@@ -1,3 +1,4 @@
+#!env python
 from setuptools import setup, find_packages
 
 
@@ -13,6 +14,7 @@ setup(
     zip_safe=False,
 
     install_requires=['flask',
+                      'flask-login',
                       'flask-wtf',
                       'ldap3'
                       ],
